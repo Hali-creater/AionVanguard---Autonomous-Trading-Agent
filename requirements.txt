@@ -1,0 +1,9 @@
+pandas
+numpy
+requests
+python-dotenv
+streamlit
+scikit-learn
+ta
+alpaca-trade-api
+pytest
