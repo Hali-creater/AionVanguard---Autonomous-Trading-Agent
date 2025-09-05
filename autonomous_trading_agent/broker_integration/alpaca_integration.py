@@ -9,14 +9,14 @@ class AlpacaIntegration:
     """
     Integrates data fetching and execution for Alpaca.
     """
-    def __init__(self):
+    def __init__(self, api_key: str, api_secret: str, base_url: str = 'https://paper-api.alpaca.markets'):
         """
         Initializes the integration by creating instances of the broker's
         specific DataFetcher and Executor classes.
         """
         try:
-            self.data_fetcher = AlpacaDataFetcher()
-            self.executor = AlpacaExecutor()
+            self.data_fetcher = AlpacaDataFetcher(api_key, api_secret, base_url)
+            self.executor = AlpacaExecutor(api_key, api_secret, base_url)
             logging.info('AlpacaIntegration initialized.')
         except Exception as e:
             logging.error(f'Error initializing AlpacaIntegration: {e}')

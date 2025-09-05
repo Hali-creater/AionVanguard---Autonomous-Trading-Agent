@@ -12,19 +12,19 @@ class AlpacaExecutor(BaseExecutor):
     Order executor specifically for the Alpaca trading platform.
 
     Implements the BaseExecutor interface using the Alpaca REST API.
-    Requires ALPACA_API_KEY_ID, ALPACA_API_SECRET_KEY, and optionally
-    ALPACA_BASE_URL environment variables.
+    Requires API_KEY, API_SECRET, and optionally
+    BASE_URL.
     """
-    def __init__(self):
+    def __init__(self, api_key: str, api_secret: str, base_url: str = 'https://paper-api.alpaca.markets'):
         """
-        Initializes the AlpacaExecutor by loading API credentials from
-        environment variables and establishing a REST API connection.
+        Initializes the AlpacaExecutor by taking API credentials and
+        establishing a REST API connection.
         """
-        self.api_key = os.getenv('ALPACA_API_KEY_ID')
-        self.api_secret = os.getenv('ALPACA_API_SECRET_KEY')
-        self.base_url = os.getenv('ALPACA_BASE_URL', 'https://paper-api.alpaca.markets')
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.base_url = base_url
         if not self.api_key or not self.api_secret:
-            raise ValueError('Alpaca API key and secret must be set in environment variables.')
+            raise ValueError('Alpaca API key and secret must be provided.')
         try:
             self.api = REST(self.api_key, self.api_secret, self.base_url)
             logging.info('AlpacaExecutor initialized successfully.')

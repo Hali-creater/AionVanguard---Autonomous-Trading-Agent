@@ -12,19 +12,19 @@ class AlpacaDataFetcher(BaseDataFetcher):
     Data fetcher specifically for the Alpaca trading platform.
 
     Implements the BaseDataFetcher interface using the Alpaca API.
-    Requires ALPACA_API_KEY_ID, ALPACA_API_SECRET_KEY, and optionally
-    ALPACA_BASE_URL environment variables.
+    Requires API_KEY, API_SECRET, and optionally
+    BASE_URL.
     """
-    def __init__(self):
+    def __init__(self, api_key: str, api_secret: str, base_url: str = 'https://paper-api.alpaca.markets'):
         """
-        Initializes the AlpacaDataFetcher by loading API credentials from
-        environment variables and establishing a REST API connection.
+        Initializes the AlpacaDataFetcher by taking API credentials and
+        establishing a REST API connection.
         """
-        self.api_key = os.getenv('ALPACA_API_KEY_ID')
-        self.api_secret = os.getenv('ALPACA_API_SECRET_KEY')
-        self.base_url = os.getenv('ALPACA_BASE_URL', 'https://paper-api.alpaca.markets') # Default to paper trading URL
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.base_url = base_url
         if not self.api_key or not self.api_secret:
-            raise ValueError('Alpaca API key and secret must be set in environment variables.')
+            raise ValueError('Alpaca API key and secret must be provided.')
         self.api = REST(self.api_key, self.api_secret, self.base_url)
 
     def fetch_historical_data(self, symbol: str, timeframe: str, start_date: str, end_date: str) -> pd.DataFrame:

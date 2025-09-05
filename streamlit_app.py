@@ -7,6 +7,9 @@ from datetime import datetime, timedelta
 from autonomous_trading_agent.strategy.trading_strategy import CombinedStrategy
 from autonomous_trading_agent.risk_management.risk_manager import RiskManager
 from autonomous_trading_agent.broker_integration.alpaca_integration import AlpacaIntegration
+from autonomous_trading_agent.broker_integration.binance_integration import BinanceIntegration
+from autonomous_trading_agent.broker_integration.interactive_brokers_integration import InteractiveBrokersIntegration
+from autonomous_trading_agent.broker_integration.oanda_integration import OandaIntegration
 # Import other integrations as they are implemented
 
 # --- App Configuration ---
@@ -24,6 +27,8 @@ if 'positions' not in st.session_state:
     st.session_state.positions = pd.DataFrame(columns=['Symbol', 'Quantity', 'Side', 'Entry Price', 'Current Price', 'Unrealized P/L', 'Stop Loss', 'Take Profit', 'Entry Time'])
 if 'account_balance' not in st.session_state:
     st.session_state.account_balance = 10000.0 # Default
+if 'keys_saved' not in st.session_state:
+    st.session_state.keys_saved = False
 
 # --- Helper Functions ---
 def add_log(message):
@@ -39,12 +44,7 @@ class TradingAgent:
         self.config = config
         self.strategy = CombinedStrategy()
         # Initialize broker integration
-        if self.config['broker'] == 'Alpaca':
-            # In a real scenario, you would pass api_key and api_secret here
-            self.broker = AlpacaIntegration()
-        else:
-            add_log(f"Broker '{self.config['broker']}' is not yet supported.")
-            raise ValueError(f"Broker '{self.config['broker']}' is not yet supported.")
+        self.broker = self._get_broker_integration(config)
 
         # Fetch initial account balance from broker
         # For now, we'll use the user-provided initial balance
@@ -56,6 +56,19 @@ class TradingAgent:
             daily_risk_limit_percentage=0.05 # Placeholder, can be added to UI
         )
         add_log("Agent initialized successfully.")
+
+    def _get_broker_integration(self, config):
+        broker_name = config['broker']
+        api_key = config.get('api_key')
+        api_secret = config.get('api_secret')
+
+        if broker_name == 'Alpaca':
+            if not api_key or not api_secret:
+                raise ValueError("Alpaca API Key and Secret are required.")
+            return AlpacaIntegration(api_key=api_key, api_secret=api_secret)
+        else:
+            add_log(f"Broker '{broker_name}' is not yet supported.")
+            raise ValueError(f"Broker '{broker_name}' is not yet supported.")
 
     def run_trading_loop(self):
         add_log("Trading loop started.")
@@ -143,9 +156,16 @@ class TradingAgent:
         add_log("Trading loop has been terminated.")
 
 # --- UI Callbacks ---
+def save_keys():
+    if st.session_state.api_key and st.session_state.api_secret:
+        st.session_state.keys_saved = True
+        st.info("API keys saved for the session.")
+    else:
+        st.error("Please provide both API Key and Secret.")
+
 def start_agent():
-    if not st.session_state.api_key or not st.session_state.api_secret:
-        st.error("API Key and Secret must be provided.")
+    if not st.session_state.get('keys_saved', False):
+        st.error("API Keys must be saved before starting the agent.")
         return
 
     st.session_state.agent_status = "Running"
@@ -181,13 +201,23 @@ st.title("🚀 AionVanguard - Trading Agent Dashboard")
 
 with st.sidebar:
     st.header("Agent Configuration")
-    st.selectbox('Select Broker', ('Alpaca',), key='broker_select', help="Currently only Alpaca is implemented.")
+    st.selectbox('Select Broker', ('Alpaca', 'Binance', 'Interactive Brokers', 'OANDA'), key='broker_select', on_change=lambda: st.session_state.update(keys_saved=False))
+
+    selected_broker = st.session_state.broker_select
+
+    if selected_broker != 'Alpaca':
+        st.warning(f"{selected_broker} integration is not yet implemented. The agent will not work with this broker.")
+
     # Note on Security: API keys are handled via Streamlit's session state.
     # In a deployed Streamlit Cloud environment, this state is managed on the server-side
     # and is not exposed to the client's browser. The connection is secured with HTTPS.
     # This is a standard and secure way to handle secrets in Streamlit applications.
-    st.text_input("Alpaca API Key", type="password", key='api_key')
-    st.text_input("Alpaca API Secret", type="password", key='api_secret')
+    st.text_input(f"{selected_broker} API Key", type="password", key='api_key', on_change=lambda: st.session_state.update(keys_saved=False))
+    st.text_input(f"{selected_broker} API Secret", type="password", key='api_secret', on_change=lambda: st.session_state.update(keys_saved=False))
+
+    st.button("Save Keys", on_click=save_keys, use_container_width=True)
+    if st.session_state.get('keys_saved', False):
+        st.success("API keys are saved for this session.")
     st.info("Your API keys are stored securely in the app's memory for this session only and are not saved elsewhere.")
     st.text_input("Symbols (comma-separated)", value="AAPL,TSLA", key='symbols')
 
@@ -220,7 +250,7 @@ with st.sidebar:
     st.header("Agent Controls")
     col1, col2 = st.columns(2)
     with col1:
-        st.button("▶️ Start Agent", on_click=start_agent, use_container_width=True, disabled=(st.session_state.agent_status == "Running"))
+        st.button("▶️ Start Agent", on_click=start_agent, use_container_width=True, disabled=(st.session_state.agent_status == "Running" or not st.session_state.get('keys_saved', False)))
     with col2:
         st.button("⏹️ Stop Agent", on_click=stop_agent, use_container_width=True, disabled=(st.session_state.agent_status != "Running"))
 
