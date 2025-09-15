@@ -1,11 +1,12 @@
 # AionVanguard - Autonomous Trading Agent
 
-This project is an autonomous trading agent designed to execute trades based on a combination of technical analysis strategies. It features a modular architecture and a user interface built with Streamlit for easy monitoring and control.
+This project is an autonomous trading agent designed to execute trades based on a robust technical analysis strategy. It features a decoupled, multi-threaded architecture and a responsive user interface built with Streamlit for easy monitoring and control.
 
 [![Deploy to Streamlit Cloud](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=Hali-creater/AionVanguard&branch=main&mainModule=streamlit_app.py)
 
 ## Table of Contents
 - [Overview](#overview)
+- [Architecture](#architecture)
 - [Features](#features)
 - [Deployment to Streamlit Cloud](#deployment-to-streamlit-cloud)
 - [Local Setup](#local-setup)
@@ -15,13 +16,22 @@ This project is an autonomous trading agent designed to execute trades based on 
 
 ## Overview
 
-AionVanguard is a Python-based autonomous trading agent. It uses a combination of strategies to identify trading opportunities and includes modules for risk management, broker integration, and dynamic adaptation to market conditions.
+AionVanguard is a Python-based autonomous trading agent. It uses a **Moving Average (MA) Crossover strategy combined with a Relative Strength Index (RSI) filter** to identify trading opportunities. The agent is designed for robustness and maintainability, with a clear separation between its core logic and the user interface.
+
+## Architecture
+
+The agent is built with a modern, decoupled architecture to ensure stability and responsiveness:
+- **Multi-Threaded Design:** The core `TradingAgent` runs in a separate background thread from the Streamlit UI. This ensures that the agent's long-running tasks (like fetching data and checking for signals) do not block or freeze the user interface.
+- **Message Queue Communication:** The background agent communicates with the front-end via a thread-safe message queue (`queue.Queue`). This allows the agent to send logs, status updates, and position changes to the UI in a safe and organized manner.
+- **Decoupled Logic:** The agent's core logic (`agent.py`) is completely independent of the Streamlit framework, making it easier to test, maintain, and potentially reuse in other applications.
 
 ## Features
 
-- **Core Strategy:** Combines PVG (Price-Volume-Gradient), SMC (Smart Money Concepts), and TPR (Trend-Pullback-Reversal) analysis.
+- **Core Strategy:** A classic and effective **Moving Average Crossover with RSI Filter**.
+    - A "BUY" signal is generated when the short-term MA crosses above the long-term MA, provided the RSI is not in overbought territory.
+    - A "SELL" signal is generated when the short-term MA crosses below the long-term MA, provided the RSI is not in oversold territory.
 - **Risk Management:** Implements position sizing, stop loss, take profit, and daily risk limits.
-- **Broker Flexibility:** Modular design allows for integration with brokers like Alpaca, Binance, etc.
+- **Broker Flexibility:** Modular design allows for integration with brokers like Alpaca, Binance, etc. (Currently, Alpaca is implemented).
 - **Live Dashboard:** A Streamlit-based UI for real-time monitoring, control, and performance tracking.
 
 ## Deployment to Streamlit Cloud
@@ -69,10 +79,10 @@ ALPACA_BASE_URL=https://paper-api.alpaca.markets
 .
 ├── README.md
 ├── requirements.txt
-├── .env.example
 ├── streamlit_app.py
 └── autonomous_trading_agent/
     ├── __init__.py
+    ├── agent.py                 <-- Core agent logic
     ├── adaptability/
     ├── broker_integration/
     ├── data_fetching/
@@ -84,7 +94,7 @@ ALPACA_BASE_URL=https://paper-api.alpaca.markets
 
 ## Testing
 
-The project includes a `tests/` directory with unit tests. Run tests using `pytest` from the project root:
+The project includes a `tests/` directory with robust unit and integration tests. Run tests using `pytest` from the project root. It is recommended to run it as a Python module to ensure it uses the correct environment.
 ```bash
-pytest
+python3 -m pytest
 ```
