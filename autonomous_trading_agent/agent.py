@@ -27,7 +27,7 @@ class TradingAgent:
             # In a real app, you would pass API keys from config to the integration
             self.broker = AlpacaIntegration()
         else:
-            self._send_log(f"Broker '{self.config['broker']}' is not yet supported.")
+            self._send_message("log", f"Broker '{self.config['broker']}' is not yet supported.")
             raise ValueError(f"Broker '{self.config['broker']}' is not yet supported.")
 
         self.risk_manager = RiskManager(
@@ -35,7 +35,7 @@ class TradingAgent:
             risk_per_trade_percentage=self.config['risk_per_trade'] / 100,
             daily_risk_limit_percentage=0.05 # This could be part of the config
         )
-        self._send_log("Agent initialized successfully.")
+        self._send_message("log", "Agent initialized successfully.")
 
     def _send_message(self, msg_type: str, data: Any):
         """Puts a message onto the queue for the UI to process."""
