@@ -92,9 +92,9 @@ with st.sidebar:
     st.header("Agent Controls")
     col1, col2 = st.columns(2)
     with col1:
-        st.button("▶️ Start Agent", on_click=start_agent_callback, use_container_width=True, disabled=(st.session_state.agent_status == "Running"))
+        st.button("▶️ Start Agent", on_click=start_agent_callback, width='stretch', disabled=(st.session_state.agent_status == "Running"))
     with col2:
-        st.button("⏹️ Stop Agent", on_click=stop_agent_callback, use_container_width=True, disabled=(st.session_state.agent_status != "Running"))
+        st.button("⏹️ Stop Agent", on_click=stop_agent_callback, width='stretch', disabled=(st.session_state.agent_status != "Running"))
 
 # --- Main Dashboard Area ---
 status_color = "green" if st.session_state.agent_status == "Running" else "red"
@@ -107,7 +107,7 @@ with tab1:
     st.metric("Current Balance", f"${st.session_state.account_balance:,.2f}")
     st.subheader("Open Positions")
     positions_placeholder = st.empty()
-    positions_placeholder.dataframe(st.session_state.positions, use_container_width=True)
+    positions_placeholder.dataframe(st.session_state.positions, width='stretch')
 
 with tab2:
     st.subheader("Activity Log")
