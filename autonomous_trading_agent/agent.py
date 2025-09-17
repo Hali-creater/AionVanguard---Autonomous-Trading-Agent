@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timedelta
 from queue import Queue
 import threading
+from typing import Any
 
 from autonomous_trading_agent.strategy.trading_strategy import CombinedStrategy
 from autonomous_trading_agent.risk_management.risk_manager import RiskManager
