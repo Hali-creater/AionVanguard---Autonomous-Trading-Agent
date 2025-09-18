@@ -24,11 +24,12 @@ class AlpacaIntegration:
             self.executor = None
 
 
-    def fetch_historical_data(self, symbol: str, timeframe: str, start_date: str, end_date: str) -> pd.DataFrame:
+    def fetch_historical_data(self, symbol: str, timeframe: str, start_date: str, end_date: str) -> tuple[pd.DataFrame, str | None]:
         if self.data_fetcher:
             return self.data_fetcher.fetch_historical_data(symbol, timeframe, start_date, end_date)
+
         logging.warning('Data fetcher not initialized.')
-        return pd.DataFrame()
+        return pd.DataFrame(), "Data fetcher was not initialized."
 
 
     def fetch_realtime_data(self, symbol: str):

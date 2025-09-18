@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 import ta
 import numpy as np
 import logging
+from typing import Dict, Any, Optional
 
 class BaseTradingStrategy(ABC):
     """
@@ -28,126 +29,102 @@ class BaseTradingStrategy(ABC):
 
 class CombinedStrategy(BaseTradingStrategy):
     """
-    A trading strategy combining PVG (Price-Volume-Gradient), SMC (Smart Money Concepts),
-    and TPR (Trend-Pullback-Reversal) analysis.
-
-    This is a placeholder implementation and needs detailed logic based on
-    specific interpretations of PVG, SMC, and TPR.
+    A trading strategy that combines a Moving Average (MA) Crossover with a
+    Relative Strength Index (RSI) filter for confirmation. This provides a
+    more robust signal than a simple crossover alone.
     """
-    def __init__(self):
+    def __init__(self, short_window=20, long_window=50, rsi_window=14, rsi_overbought=70, rsi_oversold=30):
         """
-        Initializes the CombinedStrategy with parameters for its constituent analyses.
+        Initializes the strategy with configurable parameters.
         """
-        # Parameters for PVG (example: periods for moving averages)
-        self.pvg_short_period = 14
-        self.pvg_long_period = 50
-        # Parameters for SMC (example: lookback periods for identifying highs/lows)
-        self.smc_lookback = 20
-        # Parameters for TPR (example: volume moving average period)
-        self.tpr_volume_period = 20
-        pass
+        if short_window >= long_window:
+            raise ValueError("short_window must be less than long_window")
 
-    def _analyze_pvg(self, data: pd.DataFrame) -> pd.DataFrame:
+        self.short_window = short_window
+        self.long_window = long_window
+        self.rsi_window = rsi_window
+        self.rsi_overbought = rsi_overbought
+        self.rsi_oversold = rsi_oversold
+        logging.info(f"Initialized MA Crossover + RSI Strategy with params: "
+                     f"Short/Long MA: {short_window}/{long_window}, RSI Window: {rsi_window}")
+
+    def _calculate_indicators(self, data: pd.DataFrame) -> Optional[Dict[str, Any]]:
         """
-        Performs PVG (Price-Volume-Gradient) analysis on the input data.
-
-        This placeholder method adds simple moving averages as an example.
-        A real implementation would include more sophisticated PVG techniques.
-
-        Args:
-            data: A pandas DataFrame with market data.
-
-        Returns:
-            The DataFrame with added PVG-related indicators/features.
+        Calculates all necessary indicators and returns the latest values.
         """
-        logging.info('Performing PVG analysis...')
-        if 'close' in data.columns:
-            data['PVG_SMA_Short'] = ta.trend.sma_indicator(data['close'], window=self.pvg_short_period)
-            data['PVG_SMA_Long'] = ta.trend.sma_indicator(data['close'], window=self.pvg_long_period)
-        else:
-             logging.warning('Close price column not found for PVG analysis.')
-        return data
+        try:
+            close_prices = data['close']
+            short_sma = ta.trend.sma_indicator(close_prices, window=self.short_window)
+            long_sma = ta.trend.sma_indicator(close_prices, window=self.long_window)
+            rsi = ta.momentum.rsi(close_prices, window=self.rsi_window)
 
-    def _analyze_smc(self, data: pd.DataFrame) -> pd.DataFrame:
+            if short_sma is None or long_sma is None or rsi is None:
+                 logging.warning("One or more indicators returned None.")
+                 return None
+
+            indicators = {
+                "latest_short_sma": short_sma.iloc[-1],
+                "latest_long_sma": long_sma.iloc[-1],
+                "previous_short_sma": short_sma.iloc[-2],
+                "previous_long_sma": long_sma.iloc[-2],
+                "latest_rsi": rsi.iloc[-1]
+            }
+
+            # Check for NaN values which can occur if data is too short
+            if any(pd.isna(val) for val in indicators.values()):
+                logging.info("Not enough data to compute all indicators for the latest candle. Holding.")
+                return None
+
+            return indicators
+
+        except Exception as e:
+            logging.error(f"Error calculating indicators: {e}")
+            return None
+
+    def _determine_signal_from_indicators(self, indicators: Dict[str, Any]) -> str:
         """
-        Performs SMC (Smart Money Concepts) analysis on the input data.
-
-        This placeholder method identifies swing highs and lows as an example.
-        A real implementation would involve identifying order blocks, liquidity zones, etc.
-
-        Args:
-            data: A pandas DataFrame with market data.
-
-        Returns:
-            The DataFrame with added SMC-related indicators/features.
+        Determines the trade signal based on a dictionary of pre-calculated indicator values.
+        This method contains the core decision logic of the strategy.
         """
-        logging.info('Performing SMC analysis...')
-        if 'high' in data.columns and 'low' in data.columns:
-            data['SMC_Swing_High'] = (data['high'].rolling(window=self.smc_lookback).max() == data['high']).astype(int)
-            data['SMC_Swing_Low'] = (data['low'].rolling(window=self.smc_lookback).min() == data['low']).astype(int)
-        else:
-            logging.warning('High or Low price columns not found for SMC analysis.')
-        return data
+        prev_short = indicators['previous_short_sma']
+        prev_long = indicators['previous_long_sma']
+        latest_short = indicators['latest_short_sma']
+        latest_long = indicators['latest_long_sma']
+        rsi = indicators['latest_rsi']
 
-    def _analyze_tpr(self, data: pd.DataFrame) -> pd.DataFrame:
-        """
-        Performs TPR (Trend-Pullback-Reversal) analysis on the input data.
+        signal = 'HOLD'
 
-        This placeholder method adds a volume simple moving average as an example.
-        The exact meaning and implementation of TPR need to be defined.
+        # Buy Condition: Bullish Crossover + RSI Confirmation
+        is_bullish_crossover = prev_short <= prev_long and latest_short > latest_long
+        if is_bullish_crossover:
+            if rsi < self.rsi_overbought:
+                signal = 'BUY'
+                logging.info(f"BUY signal: Bullish crossover and RSI ({rsi:.2f}) is below {self.rsi_overbought}.")
+            else:
+                logging.info(f"Crossover detected, but holding: RSI ({rsi:.2f}) is in overbought territory.")
 
-        Args:
-            data: A pandas DataFrame with market data.
+        # Sell Condition: Bearish Crossover + RSI Confirmation
+        is_bearish_crossover = prev_short >= prev_long and latest_short < latest_long
+        if is_bearish_crossover:
+            if rsi > self.rsi_oversold:
+                signal = 'SELL'
+                logging.info(f"SELL signal: Bearish crossover and RSI ({rsi:.2f}) is above {self.rsi_oversold}.")
+            else:
+                logging.info(f"Crossover detected, but holding: RSI ({rsi:.2f}) is in oversold territory.")
 
-        Returns:
-            The DataFrame with added TPR-related indicators/features.
-        """
-        logging.info('Performing TPR analysis...')
-        if 'volume' in data.columns:
-            data['TPR_Volume_SMA'] = ta.trend.sma_indicator(data['volume'], window=self.tpr_volume_period)
-        else:
-             data['TPR_Volume_SMA'] = np.nan # Handle case where volume is missing
-             logging.warning('Volume column not found for TPR analysis.')
-        return data
-
+        return signal
 
     def generate_signal(self, data: pd.DataFrame) -> str:
         """
-        Generates a trading signal (BUY, SELL, or HOLD) based on the combined analysis.
+        Generates a trading signal by calculating indicators and then applying decision logic.
         """
-        if data.empty:
-            logging.warning('Input data is empty. Cannot generate signal.')
+        if data.empty or 'close' not in data.columns or len(data) < self.long_window:
+            logging.warning("Input data is empty, missing 'close' column, or too short. Cannot generate signal.")
             return 'HOLD'
 
-        processed_data = self._analyze_pvg(data.copy())
-        processed_data = self._analyze_smc(processed_data)
-        processed_data = self._analyze_tpr(processed_data)
+        indicators = self._calculate_indicators(data)
 
-        processed_data.dropna(inplace=True)
-
-        if processed_data.empty:
-            logging.warning('Data became empty after dropping NaNs. Cannot generate signal.')
+        if indicators is None:
             return 'HOLD'
 
-        logging.info('Generating trading signal based on combined analysis...')
-        signal = 'HOLD'
-
-        latest_data = processed_data.iloc[-1]
-
-        buy_condition_pvg = latest_data.get('PVG_SMA_Short', -1) > latest_data.get('PVG_SMA_Long', -1)
-        buy_condition_smc = latest_data.get('SMC_Swing_Low', 0) == 1
-        buy_condition_tpr = latest_data.get('close', 0) > latest_data.get('PVG_SMA_Long', 0) and latest_data.get('TPR_Volume_SMA', 0) > 0
-
-
-        if buy_condition_pvg and buy_condition_smc and buy_condition_tpr:
-            signal = 'BUY'
-        else:
-            sell_condition_pvg = latest_data.get('PVG_SMA_Short', 1) < latest_data.get('PVG_SMA_Long', 1)
-            sell_condition_smc = latest_data.get('SMC_Swing_High', 0) == 1
-            sell_condition_tpr = latest_data.get('close', 0) < latest_data.get('PVG_SMA_Long', 0) and latest_data.get('TPR_Volume_SMA', 0) > 0
-
-            if sell_condition_pvg and sell_condition_smc and sell_condition_tpr:
-                 signal = 'SELL'
-
-        logging.info(f'Generated signal: {signal}')
-        return signal
+        return self._determine_signal_from_indicators(indicators)
