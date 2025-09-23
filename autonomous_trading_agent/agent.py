@@ -24,8 +24,10 @@ class TradingAgent:
         self.strategy = CombinedStrategy()
 
         if self.config['broker'] == 'Alpaca':
-            # In a real app, you would pass API keys from config to the integration
-            self.broker = AlpacaIntegration()
+            self.broker = AlpacaIntegration(
+                api_key=self.config.get('api_key'),
+                api_secret=self.config.get('api_secret')
+            )
         else:
             self._send_message("log", f"Broker '{self.config['broker']}' is not yet supported.")
             raise ValueError(f"Broker '{self.config['broker']}' is not yet supported.")
