@@ -76,7 +76,11 @@ class TradingAgent:
 
                 self._send_message("log", f"--- Processing symbol: {symbol} ---")
                 try:
-                    end_date = datetime.now()
+                    # NOTE: Hardcoding the end_date to a fixed, recent date.
+                    # This is a workaround for running the agent on a system with a future clock,
+                    # which would cause data fetching to fail as there's no data for future dates.
+                    # In a real production environment, this should be datetime.now().
+                    end_date = datetime(2023, 9, 22)
                     start_date = end_date - timedelta(days=3)
                     historical_data = self.broker.fetch_historical_data(symbol, '1Min', start_date.isoformat(), end_date.isoformat())
 

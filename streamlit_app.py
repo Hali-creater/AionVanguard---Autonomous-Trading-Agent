@@ -47,7 +47,7 @@ def start_agent_callback():
         "broker": st.session_state.broker_select,
         "api_key": st.session_state.api_key,
         "api_secret": st.session_state.api_secret,
-        "symbols": [s.strip().upper() for s in st.session_state.symbols.split(',')],
+        "symbols": [s.strip().upper() for s in st.session_state.symbols.split(',') if s.strip()],
         "initial_balance": st.session_state.initial_balance,
         "risk_per_trade": st.session_state.risk_per_trade,
         "risk_reward_ratio": st.session_state.risk_reward_ratio,
