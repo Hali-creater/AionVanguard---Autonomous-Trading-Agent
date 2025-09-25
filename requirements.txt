@@ -7,4 +7,3 @@ scikit-learn
 ta
 alpaca-trade-api
 pytest
-yfinance
