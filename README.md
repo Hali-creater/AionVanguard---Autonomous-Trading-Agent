@@ -1,14 +1,3 @@
----
-title: AionVanguard - Autonomous Trading Agent
-emoji: 🚀
-colorFrom: blue
-colorTo: green
-sdk: streamlit
-sdk_version: "1.30.0"
-app_file: streamlit_app.py
-pinned: false
----
-
 # AionVanguard - Autonomous Trading Agent
 
 This project is an autonomous trading agent designed to execute trades based on a robust technical analysis strategy. It features a decoupled, multi-threaded architecture and a responsive user interface built with Streamlit for easy monitoring and control.
