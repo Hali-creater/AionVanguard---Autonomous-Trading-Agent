@@ -9,6 +9,7 @@ from typing import Any
 from autonomous_trading_agent.strategy.trading_strategy import CombinedStrategy
 from autonomous_trading_agent.risk_management.risk_manager import RiskManager
 from autonomous_trading_agent.broker_integration.alpaca_integration import AlpacaIntegration
+from autonomous_trading_agent.data_fetching.yfinance_data_fetcher import YFinanceDataFetcher
 
 class TradingAgent:
     """
@@ -22,6 +23,7 @@ class TradingAgent:
         self.thread = None
 
         self.strategy = CombinedStrategy()
+        self.yfinance_fetcher = YFinanceDataFetcher()
 
         if self.config['broker'] == 'Alpaca':
             self.broker = AlpacaIntegration(
@@ -78,16 +80,19 @@ class TradingAgent:
 
                 self._send_message("log", f"--- Processing symbol: {symbol} ---")
                 try:
-                    # NOTE: Hardcoding the end_date to a fixed, recent date.
-                    # This is a workaround for running the agent on a system with a future clock,
-                    # which would cause data fetching to fail as there's no data for future dates.
-                    # In a real production environment, this should be datetime.now().
-                    end_date = datetime(2023, 9, 22)
+                    end_date = datetime.now()
                     start_date = end_date - timedelta(days=3)
+
+                    # First, try to fetch data from the primary broker
                     historical_data = self.broker.fetch_historical_data(symbol, '1Min', start_date.isoformat(), end_date.isoformat())
 
+                    # If the primary source fails, fall back to yfinance
                     if historical_data.empty:
-                        self._send_message("log", f"Could not fetch historical data for {symbol}.")
+                        self._send_message("log", f"Could not fetch historical data for {symbol} from broker. Falling back to yfinance.")
+                        historical_data = self.yfinance_fetcher.fetch_historical_data(symbol, '1Min', start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+
+                    if historical_data.empty:
+                        self._send_message("log", f"Could not fetch historical data for {symbol} from any source.")
                         continue
 
                     self._send_message("log", f"Fetched {len(historical_data)} data points for {symbol}.")
