@@ -7,3 +7,4 @@ scikit-learn
 ta
 alpaca-trade-api
 pytest
+alpha-vantage

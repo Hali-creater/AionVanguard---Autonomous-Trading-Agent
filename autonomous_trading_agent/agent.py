@@ -8,6 +8,7 @@ from typing import Any
 
 from autonomous_trading_agent.strategy.trading_strategy import CombinedStrategy
 from autonomous_trading_agent.risk_management.risk_manager import RiskManager
+from autonomous_trading_agent.data_fetching.alpha_vantage_data_fetcher import AlphaVantageDataFetcher
 from autonomous_trading_agent.broker_integration.alpaca_integration import AlpacaIntegration
 
 class TradingAgent:
@@ -23,10 +24,14 @@ class TradingAgent:
 
         self.strategy = CombinedStrategy()
 
+        # The data fetcher is now separate from the broker for execution
+        self.data_fetcher = AlphaVantageDataFetcher(api_key=self.config.get('alpha_vantage_api_key'))
+
         if self.config['broker'] == 'Alpaca':
+            # The broker is still used for trade execution
             self.broker = AlpacaIntegration(
-                api_key=self.config.get('api_key'),
-                api_secret=self.config.get('api_secret')
+                api_key=self.config.get('alpaca_api_key'),
+                api_secret=self.config.get('alpaca_api_secret')
             )
         else:
             self._send_message("log", f"Broker '{self.config['broker']}' is not yet supported.")
@@ -78,13 +83,9 @@ class TradingAgent:
 
                 self._send_message("log", f"--- Processing symbol: {symbol} ---")
                 try:
-                    # NOTE: Hardcoding the end_date to a fixed, recent date.
-                    # This is a workaround for running the agent on a system with a future clock,
-                    # which would cause data fetching to fail as there's no data for future dates.
-                    # In a real production environment, this should be datetime.now().
-                    end_date = datetime(2023, 9, 22)
-                    start_date = end_date - timedelta(days=3)
-                    historical_data = self.broker.fetch_historical_data(symbol, '1Min', start_date.isoformat(), end_date.isoformat())
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=30) # Fetch more data for better indicator calculation
+                    historical_data = self.data_fetcher.fetch_historical_data(symbol, '1Min', start_date.isoformat(), end_date.isoformat())
 
                     if historical_data.empty:
                         self._send_message("log", f"Could not fetch historical data for {symbol}.")
