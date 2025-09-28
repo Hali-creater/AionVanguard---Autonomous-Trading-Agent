@@ -8,7 +8,9 @@ from typing import Any
 
 from autonomous_trading_agent.strategy.trading_strategy import CombinedStrategy
 from autonomous_trading_agent.risk_management.risk_manager import RiskManager
+import finnhub
 from autonomous_trading_agent.data_fetching.finnhub_data_fetcher import FinnhubDataFetcher
+from autonomous_trading_agent.data_fetching.yfinance_data_fetcher import YFinanceDataFetcher
 from autonomous_trading_agent.broker_integration.alpaca_integration import AlpacaIntegration
 
 class TradingAgent:
@@ -25,7 +27,8 @@ class TradingAgent:
         self.strategy = CombinedStrategy()
 
         # The data fetcher is now separate from the broker for execution
-        self.data_fetcher = FinnhubDataFetcher(api_key=self.config.get('finnhub_api_key'))
+        self.primary_data_fetcher = FinnhubDataFetcher(api_key=self.config.get('finnhub_api_key'))
+        self.fallback_data_fetcher = YFinanceDataFetcher()
 
         if self.config['broker'] == 'Alpaca':
             # The broker is still used for trade execution
@@ -85,10 +88,18 @@ class TradingAgent:
                 try:
                     end_date = datetime.now()
                     start_date = end_date - timedelta(days=30) # Fetch more data for better indicator calculation
-                    historical_data = self.data_fetcher.fetch_historical_data(symbol, '1Min', start_date.isoformat(), end_date.isoformat())
+
+                    try:
+                        historical_data = self.primary_data_fetcher.fetch_historical_data(symbol, '1Min', start_date.isoformat(), end_date.isoformat())
+                    except finnhub.FinnhubAPIException as e:
+                        if e.status_code == 403:
+                            self._send_message("log", f"Finnhub API key lacks permissions for {symbol}. Falling back to yfinance.")
+                            historical_data = self.fallback_data_fetcher.fetch_historical_data(symbol, '1Min', start_date.isoformat(), end_date.isoformat())
+                        else:
+                            raise e # Re-raise other API errors
 
                     if historical_data.empty:
-                        self._send_message("log", f"Could not fetch historical data for {symbol}.")
+                        self._send_message("log", f"Could not fetch historical data for {symbol} from any source.")
                         continue
 
                     self._send_message("log", f"Fetched {len(historical_data)} data points for {symbol}.")

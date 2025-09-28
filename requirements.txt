@@ -8,3 +8,4 @@ ta
 alpaca-trade-api
 pytest
 finnhub-python
+yfinance
