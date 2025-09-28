@@ -1,4 +1,3 @@
-import pandas as pd
 import time
 import logging
 from datetime import datetime, timedelta
@@ -6,44 +5,43 @@ from queue import Queue
 import threading
 from typing import Any
 
-from autonomous_trading_agent.strategy.trading_strategy import CombinedStrategy
+from autonomous_trading_agent.strategy.trading_strategy import BaseTradingStrategy
 from autonomous_trading_agent.risk_management.risk_manager import RiskManager
-import finnhub
-from autonomous_trading_agent.data_fetching.finnhub_data_fetcher import FinnhubDataFetcher
-from autonomous_trading_agent.data_fetching.yfinance_data_fetcher import YFinanceDataFetcher
-from autonomous_trading_agent.broker_integration.alpaca_integration import AlpacaIntegration
+from autonomous_trading_agent.data_fetching.data_manager import DataManager
+from autonomous_trading_agent.broker_integration.broker_factory import create_broker
+from autonomous_trading_agent.portfolio.portfolio_manager import PortfolioManager
 
 class TradingAgent:
     """
-    The core trading agent. It runs in a separate thread and communicates
-    with the UI via a message queue.
+    The core trading agent, which acts as a controller to orchestrate the
+    different components of the trading system. It runs in a separate thread.
     """
-    def __init__(self, config: dict, message_queue: Queue):
+    def __init__(self, config: dict, message_queue: Queue, strategy: BaseTradingStrategy):
         self.config = config
         self.message_queue = message_queue
+        self.strategy = strategy
         self.is_running = threading.Event()
         self.thread = None
 
-        self.strategy = CombinedStrategy()
+        self._send_message("log", "Initializing agent components...")
 
-        # The data fetcher is now separate from the broker for execution
-        self.primary_data_fetcher = FinnhubDataFetcher(api_key=self.config.get('finnhub_api_key'))
-        self.fallback_data_fetcher = YFinanceDataFetcher()
-
-        if self.config['broker'] == 'Alpaca':
-            # The broker is still used for trade execution
-            self.broker = AlpacaIntegration(
-                api_key=self.config.get('alpaca_api_key'),
-                api_secret=self.config.get('alpaca_api_secret')
-            )
-        else:
-            self._send_message("log", f"Broker '{self.config['broker']}' is not yet supported.")
-            raise ValueError(f"Broker '{self.config['broker']}' is not yet supported.")
+        # Initialize all the core components
+        self.data_manager = DataManager(config)
+        self.broker = create_broker(config)
+        if not self.broker:
+            self._send_message("log", "Failed to initialize broker. Agent cannot start.")
+            raise ValueError("Broker initialization failed.")
 
         self.risk_manager = RiskManager(
-            account_balance=self.config['initial_balance'],
-            risk_per_trade_percentage=self.config['risk_per_trade'] / 100,
-            daily_risk_limit_percentage=0.05 # This could be part of the config
+            account_balance=self.config.get('initial_balance', 100000),
+            risk_per_trade_percentage=self.config.get('risk_per_trade', 1.0) / 100
+        )
+
+        self.portfolio_manager = PortfolioManager(
+            config=self.config,
+            broker=self.broker,
+            risk_manager=self.risk_manager,
+            message_queue=self.message_queue
         )
         self._send_message("log", "Agent initialized successfully.")
 
@@ -59,7 +57,7 @@ class TradingAgent:
 
         self._send_message("log", "Agent starting...")
         self.is_running.set()
-        self.thread = threading.Thread(target=self.run_trading_loop, daemon=True)
+        self.thread = threading.Thread(target=self._trading_loop, daemon=True)
         self.thread.start()
         self._send_message("status_update", "Running")
 
@@ -73,76 +71,55 @@ class TradingAgent:
         self.is_running.clear()
         self._send_message("status_update", "Stopped")
 
-    def run_trading_loop(self):
-        """The main loop where the agent fetches data, gets signals, and acts."""
+    def _trading_loop(self):
+        """
+        The main loop where the agent orchestrates fetching data, generating
+        signals, and managing the portfolio.
+        """
         self._send_message("log", "Trading loop thread started.")
 
-        open_positions = pd.DataFrame(columns=['Symbol', 'Quantity', 'Side', 'Entry Price', 'Current Price', 'Unrealized P/L', 'Stop Loss', 'Take Profit', 'Entry Time'])
-
         while self.is_running.is_set():
-            for symbol in self.config['symbols']:
-                if not self.is_running.is_set():
-                    break
+            try:
+                self._send_message("log", "--- Starting new trading cycle ---")
 
-                self._send_message("log", f"--- Processing symbol: {symbol} ---")
-                try:
+                # 1. Process signals for each symbol
+                for symbol in self.config['symbols']:
+                    if not self.is_running.is_set(): break
+
+                    self._send_message("log", f"Processing symbol: {symbol}")
+
                     end_date = datetime.now()
-                    start_date = end_date - timedelta(days=30) # Fetch more data for better indicator calculation
+                    start_date = end_date - timedelta(days=30) # Lookback for indicators
 
-                    try:
-                        historical_data = self.primary_data_fetcher.fetch_historical_data(symbol, '1Min', start_date.isoformat(), end_date.isoformat())
-                    except finnhub.FinnhubAPIException as e:
-                        if e.status_code == 403:
-                            self._send_message("log", f"Finnhub API key lacks permissions for {symbol}. Falling back to yfinance.")
-                            historical_data = self.fallback_data_fetcher.fetch_historical_data(symbol, '1Min', start_date.isoformat(), end_date.isoformat())
-                        else:
-                            raise e # Re-raise other API errors
+                    historical_data = self.data_manager.fetch_historical_data(
+                        symbol, '1Min', start_date.isoformat(), end_date.isoformat()
+                    )
 
                     if historical_data.empty:
-                        self._send_message("log", f"Could not fetch historical data for {symbol} from any source.")
+                        self._send_message("log", f"No data for {symbol}, skipping.")
                         continue
 
-                    self._send_message("log", f"Fetched {len(historical_data)} data points for {symbol}.")
                     signal = self.strategy.generate_signal(historical_data)
                     self._send_message("log", f"Signal for {symbol}: {signal}")
 
-                    # Simplified execution logic
-                    if signal in ['BUY', 'SELL']:
-                        if not self.risk_manager.check_daily_risk_limit():
-                            self._send_message("log", "Daily risk limit reached. Halting trades.")
-                            self.stop()
-                            break
+                    # Let the portfolio manager handle the signal
+                    continue_trading = self.portfolio_manager.process_signal(signal, symbol, historical_data)
 
-                        entry_price = historical_data['close'].iloc[-1]
-                        stop_loss_price = entry_price * (1 - 0.02) if signal == 'BUY' else entry_price * (1 + 0.02)
-                        position_size = self.risk_manager.calculate_position_size(entry_price, stop_loss_price)
-                        take_profit_price = self.risk_manager.determine_take_profit(entry_price, stop_loss_price, self.config['risk_reward_ratio'])
+                    if not continue_trading:
+                        self._send_message("log", "A risk limit was hit. Stopping agent.")
+                        self.stop()
+                        break
 
-                        if position_size > 0:
-                            self._send_message("log", f"SIMULATING {signal} for {position_size:.2f} shares of {symbol} at {entry_price:.2f}")
-                            new_position = pd.DataFrame([{'Symbol': symbol, 'Quantity': position_size, 'Side': signal, 'Entry Price': entry_price, 'Current Price': entry_price, 'Unrealized P/L': 0.0, 'Stop Loss': stop_loss_price, 'Take Profit': take_profit_price, 'Entry Time': datetime.now()}])
-                            open_positions = pd.concat([open_positions, new_position], ignore_index=True)
-                            self._send_message("position_update", open_positions.to_dict('records'))
+                # 2. Manage all open positions (e.g., check for exits)
+                if self.is_running.is_set():
+                    self.portfolio_manager.manage_open_positions()
 
-                except Exception as e:
-                    self._send_message("log", f"An error occurred while processing {symbol}: {e}")
-                    logging.error(f"Error processing {symbol}: {e}", exc_info=True)
+                self._send_message("log", "Cycle finished. Waiting for next iteration...")
+                self.is_running.wait(self.config.get("trading_interval", 60))
 
-            # Simplified time-based exit logic
-            if not open_positions.empty:
-                indices_to_close = [
-                    idx for idx, pos in open_positions.iterrows()
-                    if (datetime.now() - pos['Entry Time']) > timedelta(minutes=self.config['time_based_exit'])
-                ]
-                if indices_to_close:
-                    for idx in indices_to_close:
-                         self._send_message("log", f"Time-based exit for {open_positions.loc[idx, 'Symbol']}.")
-                    open_positions = open_positions.drop(indices_to_close).reset_index(drop=True)
-                    self._send_message("position_update", open_positions.to_dict('records'))
-
-            self._send_message("log", "Loop finished. Waiting for next 60s iteration...")
-            # This sleep is non-blocking for the UI as it's in a separate thread.
-            # It yields control, allowing the stop event to be checked.
-            self.is_running.wait(60)
+            except Exception as e:
+                self._send_message("log", f"An unexpected error occurred in the trading loop: {e}")
+                logging.error(f"Trading loop error: {e}", exc_info=True)
+                self.is_running.wait(60) # Wait before retrying
 
         self._send_message("log", "Trading loop has been terminated.")

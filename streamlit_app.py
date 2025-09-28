@@ -7,6 +7,7 @@ from datetime import datetime
 
 from autonomous_trading_agent.agent import TradingAgent
 from autonomous_trading_agent.risk_management.risk_manager import RiskManager
+from autonomous_trading_agent.strategy.trading_strategy import CombinedStrategy
 
 # --- App Configuration ---
 st.set_page_config(layout="wide", page_title="AionVanguard - Autonomous Trading Agent")
@@ -52,6 +53,7 @@ def start_agent_callback():
         "alpaca_api_key": st.session_state.alpaca_api_key,
         "alpaca_api_secret": st.session_state.alpaca_api_secret,
         "finnhub_api_key": st.session_state.finnhub_api_key,
+        "data_sources": ["finnhub", "yfinance"],  # Define the order of data sources
         "symbols": [s.strip().upper() for s in st.session_state.symbols.split(',') if s.strip()],
         "initial_balance": st.session_state.initial_balance,
         "risk_per_trade": st.session_state.risk_per_trade,
@@ -60,8 +62,11 @@ def start_agent_callback():
     }
 
     try:
+        # Create the strategy instance
+        strategy = CombinedStrategy()
+
         # Create a new agent instance and start it. It will run in a background thread.
-        st.session_state.agent = TradingAgent(config, st.session_state.message_queue)
+        st.session_state.agent = TradingAgent(config, st.session_state.message_queue, strategy)
         st.session_state.agent.start()
     except Exception as e:
         add_log(f"Failed to start agent: {e}")
