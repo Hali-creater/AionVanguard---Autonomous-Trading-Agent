@@ -37,16 +37,21 @@ def add_log(message):
 
 def start_agent_callback():
     """Callback to start the trading agent."""
-    if not st.session_state.api_key or not st.session_state.api_secret:
-        st.error("API Key and Secret must be provided.")
+    if not st.session_state.alpaca_api_key or not st.session_state.alpaca_api_secret:
+        st.error("Alpaca API Key and Secret must be provided for trade execution.")
+        return
+
+    if not st.session_state.finnhub_api_key:
+        st.error("Finnhub API Key must be provided for data fetching.")
         return
 
     add_log("User requested to start the agent.")
 
     config = {
         "broker": st.session_state.broker_select,
-        "api_key": st.session_state.api_key,
-        "api_secret": st.session_state.api_secret,
+        "alpaca_api_key": st.session_state.alpaca_api_key,
+        "alpaca_api_secret": st.session_state.alpaca_api_secret,
+        "finnhub_api_key": st.session_state.finnhub_api_key,
         "symbols": [s.strip().upper() for s in st.session_state.symbols.split(',') if s.strip()],
         "initial_balance": st.session_state.initial_balance,
         "risk_per_trade": st.session_state.risk_per_trade,
@@ -73,12 +78,17 @@ def stop_agent_callback():
 st.title("🚀 AionVanguard - Trading Agent Dashboard")
 
 with st.sidebar:
-    # Configuration and controls are defined here as before
     st.header("Agent Configuration")
-    st.selectbox('Select Broker', ('Alpaca',), key='broker_select', help="Currently only Alpaca is implemented.")
-    st.text_input("Alpaca API Key", type="password", key='api_key')
-    st.text_input("Alpaca API Secret", type="password", key='api_secret')
-    st.info("Your API keys are stored securely in the app's memory for this session only.")
+
+    st.subheader("Data Source (Finnhub)")
+    st.text_input("Finnhub API Key", type="password", key='finnhub_api_key', help="Required for fetching historical price data.")
+
+    st.subheader("Broker (Alpaca)")
+    st.selectbox('Select Broker', ('Alpaca',), key='broker_select', help="Used for trade execution.")
+    st.text_input("Alpaca API Key", type="password", key='alpaca_api_key', help="Required for executing trades.")
+    st.text_input("Alpaca API Secret", type="password", key='alpaca_api_secret', help="Required for executing trades.")
+
+    st.info("Your API keys are not stored and are only used for this session.")
     st.text_input("Symbols (comma-separated)", value="AAPL,TSLA", key='symbols')
 
     st.subheader("Risk Management")
@@ -92,9 +102,9 @@ with st.sidebar:
     st.header("Agent Controls")
     col1, col2 = st.columns(2)
     with col1:
-        st.button("▶️ Start Agent", on_click=start_agent_callback, width='stretch', disabled=(st.session_state.agent_status == "Running"))
+        st.button("▶️ Start Agent", on_click=start_agent_callback, use_container_width=True, disabled=(st.session_state.agent_status == "Running"))
     with col2:
-        st.button("⏹️ Stop Agent", on_click=stop_agent_callback, width='stretch', disabled=(st.session_state.agent_status != "Running"))
+        st.button("⏹️ Stop Agent", on_click=stop_agent_callback, use_container_width=True, disabled=(st.session_state.agent_status != "Running"))
 
 # --- Main Dashboard Area ---
 status_color = "green" if st.session_state.agent_status == "Running" else "red"
@@ -107,7 +117,7 @@ with tab1:
     st.metric("Current Balance", f"${st.session_state.account_balance:,.2f}")
     st.subheader("Open Positions")
     positions_placeholder = st.empty()
-    positions_placeholder.dataframe(st.session_state.positions, width='stretch')
+    positions_placeholder.dataframe(st.session_state.positions, use_container_width=True)
 
 with tab2:
     st.subheader("Activity Log")

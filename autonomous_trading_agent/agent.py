@@ -8,8 +8,10 @@ from typing import Any
 
 from autonomous_trading_agent.strategy.trading_strategy import CombinedStrategy
 from autonomous_trading_agent.risk_management.risk_manager import RiskManager
-from autonomous_trading_agent.broker_integration.alpaca_integration import AlpacaIntegration
+import finnhub
+from autonomous_trading_agent.data_fetching.finnhub_data_fetcher import FinnhubDataFetcher
 from autonomous_trading_agent.data_fetching.yfinance_data_fetcher import YFinanceDataFetcher
+from autonomous_trading_agent.broker_integration.alpaca_integration import AlpacaIntegration
 
 class TradingAgent:
     """
@@ -23,12 +25,16 @@ class TradingAgent:
         self.thread = None
 
         self.strategy = CombinedStrategy()
-        self.yfinance_fetcher = YFinanceDataFetcher()
+
+        # The data fetcher is now separate from the broker for execution
+        self.primary_data_fetcher = FinnhubDataFetcher(api_key=self.config.get('finnhub_api_key'))
+        self.fallback_data_fetcher = YFinanceDataFetcher()
 
         if self.config['broker'] == 'Alpaca':
+            # The broker is still used for trade execution
             self.broker = AlpacaIntegration(
-                api_key=self.config.get('api_key'),
-                api_secret=self.config.get('api_secret')
+                api_key=self.config.get('alpaca_api_key'),
+                api_secret=self.config.get('alpaca_api_secret')
             )
         else:
             self._send_message("log", f"Broker '{self.config['broker']}' is not yet supported.")
@@ -81,15 +87,16 @@ class TradingAgent:
                 self._send_message("log", f"--- Processing symbol: {symbol} ---")
                 try:
                     end_date = datetime.now()
-                    start_date = end_date - timedelta(days=3)
+                    start_date = end_date - timedelta(days=30) # Fetch more data for better indicator calculation
 
-                    # First, try to fetch data from the primary broker
-                    historical_data = self.broker.fetch_historical_data(symbol, '1Min', start_date.isoformat(), end_date.isoformat())
-
-                    # If the primary source fails, fall back to yfinance
-                    if historical_data.empty:
-                        self._send_message("log", f"Could not fetch historical data for {symbol} from broker. Falling back to yfinance.")
-                        historical_data = self.yfinance_fetcher.fetch_historical_data(symbol, '1Min', start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+                    try:
+                        historical_data = self.primary_data_fetcher.fetch_historical_data(symbol, '1Min', start_date.isoformat(), end_date.isoformat())
+                    except finnhub.FinnhubAPIException as e:
+                        if e.status_code == 403:
+                            self._send_message("log", f"Finnhub API key lacks permissions for {symbol}. Falling back to yfinance.")
+                            historical_data = self.fallback_data_fetcher.fetch_historical_data(symbol, '1Min', start_date.isoformat(), end_date.isoformat())
+                        else:
+                            raise e # Re-raise other API errors
 
                     if historical_data.empty:
                         self._send_message("log", f"Could not fetch historical data for {symbol} from any source.")

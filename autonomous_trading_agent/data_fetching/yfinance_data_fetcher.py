@@ -6,6 +6,7 @@ import logging
 class YFinanceDataFetcher(BaseDataFetcher):
     """
     Data fetcher that uses the yfinance library to fetch data from Yahoo Finance.
+    This serves as a fallback when the primary data source fails.
     """
     def fetch_historical_data(self, symbol: str, timeframe: str, start_date: str, end_date: str) -> pd.DataFrame:
         """
@@ -13,17 +14,16 @@ class YFinanceDataFetcher(BaseDataFetcher):
 
         Args:
             symbol: The trading symbol (e.g., 'AAPL').
-            timeframe: The data timeframe (e.g., '1d', '1h', '15m', '1m').
-            start_date: The start date for the historical data (YYYY-MM-DD).
-            end_date: The end date for the historical data (YYYY-MM-DD).
+            timeframe: The data timeframe (e.g., '1Min', '15Min', '1H', '1D').
+            start_date: The start date for the historical data (ISO 8601 format).
+            end_date: The end date for the historical data (ISO 8601 format).
 
         Returns:
             A pandas DataFrame containing historical data (Open, High, Low, Close, Volume),
             with the timestamp as the index. Returns an empty DataFrame on error or no data.
         """
         try:
-            # yfinance uses different interval strings than Alpaca.
-            # We need to map them.
+            # yfinance uses different interval strings. We need to map them.
             timeframe_mapping = {
                 '1Min': '1m',
                 '15Min': '15m',
@@ -34,12 +34,16 @@ class YFinanceDataFetcher(BaseDataFetcher):
             if not interval:
                 raise ValueError(f"Unsupported timeframe for yfinance: {timeframe}")
 
-            data = yf.download(tickers=symbol, start=start_date, end=end_date, interval=interval)
+            # yfinance expects start/end as YYYY-MM-DD strings
+            start_str = pd.to_datetime(start_date).strftime('%Y-%m-%d')
+            end_str = pd.to_datetime(end_date).strftime('%Y-%m-%d')
+
+            data = yf.download(tickers=symbol, start=start_str, end=end_str, interval=interval)
 
             if data.empty:
-                logging.warning(f'No historical data found for {symbol} from {start_date} to {end_date} with interval {interval}.')
+                logging.warning(f'No historical data found for {symbol} from yfinance.')
 
-            # yfinance column names are capitalized ('Open', 'High', 'Low', 'Close', 'Volume'), which is what we want.
+            # yfinance column names are capitalized, which matches our expected format.
             return data
         except Exception as e:
             logging.error(f'Error fetching historical data for {symbol} using yfinance: {e}')
