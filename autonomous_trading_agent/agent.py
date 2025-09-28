@@ -8,7 +8,7 @@ from typing import Any
 
 from autonomous_trading_agent.strategy.trading_strategy import CombinedStrategy
 from autonomous_trading_agent.risk_management.risk_manager import RiskManager
-from autonomous_trading_agent.data_fetching.alpha_vantage_data_fetcher import AlphaVantageDataFetcher
+from autonomous_trading_agent.data_fetching.finnhub_data_fetcher import FinnhubDataFetcher
 from autonomous_trading_agent.broker_integration.alpaca_integration import AlpacaIntegration
 
 class TradingAgent:
@@ -25,7 +25,7 @@ class TradingAgent:
         self.strategy = CombinedStrategy()
 
         # The data fetcher is now separate from the broker for execution
-        self.data_fetcher = AlphaVantageDataFetcher(api_key=self.config.get('alpha_vantage_api_key'))
+        self.data_fetcher = FinnhubDataFetcher(api_key=self.config.get('finnhub_api_key'))
 
         if self.config['broker'] == 'Alpaca':
             # The broker is still used for trade execution

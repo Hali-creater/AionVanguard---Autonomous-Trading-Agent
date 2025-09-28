@@ -41,8 +41,8 @@ def start_agent_callback():
         st.error("Alpaca API Key and Secret must be provided for trade execution.")
         return
 
-    if not st.session_state.alpha_vantage_api_key:
-        st.error("Alpha Vantage API Key must be provided for data fetching.")
+    if not st.session_state.finnhub_api_key:
+        st.error("Finnhub API Key must be provided for data fetching.")
         return
 
     add_log("User requested to start the agent.")
@@ -51,7 +51,7 @@ def start_agent_callback():
         "broker": st.session_state.broker_select,
         "alpaca_api_key": st.session_state.alpaca_api_key,
         "alpaca_api_secret": st.session_state.alpaca_api_secret,
-        "alpha_vantage_api_key": st.session_state.alpha_vantage_api_key,
+        "finnhub_api_key": st.session_state.finnhub_api_key,
         "symbols": [s.strip().upper() for s in st.session_state.symbols.split(',') if s.strip()],
         "initial_balance": st.session_state.initial_balance,
         "risk_per_trade": st.session_state.risk_per_trade,
@@ -80,8 +80,8 @@ st.title("🚀 AionVanguard - Trading Agent Dashboard")
 with st.sidebar:
     st.header("Agent Configuration")
 
-    st.subheader("Data Source (Alpha Vantage)")
-    st.text_input("Alpha Vantage API Key", type="password", key='alpha_vantage_api_key', help="Required for fetching historical price data.")
+    st.subheader("Data Source (Finnhub)")
+    st.text_input("Finnhub API Key", type="password", key='finnhub_api_key', help="Required for fetching historical price data.")
 
     st.subheader("Broker (Alpaca)")
     st.selectbox('Select Broker', ('Alpaca',), key='broker_select', help="Used for trade execution.")
