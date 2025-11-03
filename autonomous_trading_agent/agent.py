@@ -77,9 +77,15 @@ class TradingAgent:
         """The main loop where the agent fetches data, gets signals, and acts."""
         self._send_message("log", "Trading loop thread started.")
 
-        open_positions = pd.DataFrame(columns=['Symbol', 'Quantity', 'Side', 'Entry Price', 'Current Price', 'Unrealized P/L', 'Stop Loss', 'Take Profit', 'Entry Time'])
-
         while self.is_running.is_set():
+            # Fetch account details at the start of each loop
+            account_balance = self.broker.get_account_balance()
+            if account_balance is not None:
+                self.risk_manager.update_account_balance(account_balance)
+                self._send_message("account_balance_update", account_balance)
+
+            open_positions = self.broker.get_open_positions()
+            self._send_message("position_update", open_positions.to_dict('records'))
             for symbol in self.config['symbols']:
                 if not self.is_running.is_set():
                     break
@@ -119,26 +125,40 @@ class TradingAgent:
                         take_profit_price = self.risk_manager.determine_take_profit(entry_price, stop_loss_price, self.config['risk_reward_ratio'])
 
                         if position_size > 0:
-                            self._send_message("log", f"SIMULATING {signal} for {position_size:.2f} shares of {symbol} at {entry_price:.2f}")
-                            new_position = pd.DataFrame([{'Symbol': symbol, 'Quantity': position_size, 'Side': signal, 'Entry Price': entry_price, 'Current Price': entry_price, 'Unrealized P/L': 0.0, 'Stop Loss': stop_loss_price, 'Take Profit': take_profit_price, 'Entry Time': datetime.now()}])
-                            open_positions = pd.concat([open_positions, new_position], ignore_index=True)
-                            self._send_message("position_update", open_positions.to_dict('records'))
+                            quantity = position_size if signal == 'BUY' else -position_size
+                            order_id = self.broker.place_order(
+                                symbol=symbol,
+                                order_type='market',
+                                quantity=quantity,
+                                stop_loss=stop_loss_price,
+                                take_profit=take_profit_price
+                            )
+                            if order_id:
+                                self._send_message("log", f"Successfully placed {signal} order for {position_size:.2f} shares of {symbol}. Order ID: {order_id}")
+                                # Immediately fetch and send updated positions to the UI for responsiveness
+                                self._send_message("log", "Fetching updated positions after order placement...")
+                                updated_positions = self.broker.get_open_positions()
+                                self._send_message("position_update", updated_positions.to_dict('records'))
+                            else:
+                                self._send_message("log", f"Failed to place {signal} order for {symbol}.")
 
                 except Exception as e:
                     self._send_message("log", f"An error occurred while processing {symbol}: {e}")
                     logging.error(f"Error processing {symbol}: {e}", exc_info=True)
 
-            # Simplified time-based exit logic
+            # Re-implement time-based exit logic with live broker data
             if not open_positions.empty:
-                indices_to_close = [
-                    idx for idx, pos in open_positions.iterrows()
-                    if (datetime.now() - pos['Entry Time']) > timedelta(minutes=self.config['time_based_exit'])
+                # Ensure 'entry_time' column is in datetime format
+                open_positions['entry_time'] = pd.to_datetime(open_positions['entry_time'], utc=True)
+
+                positions_to_close = open_positions[
+                    (datetime.now(pd.Timestamp.utcnow().tz) - open_positions['entry_time']) > timedelta(minutes=self.config['time_based_exit'])
                 ]
-                if indices_to_close:
-                    for idx in indices_to_close:
-                         self._send_message("log", f"Time-based exit for {open_positions.loc[idx, 'Symbol']}.")
-                    open_positions = open_positions.drop(indices_to_close).reset_index(drop=True)
-                    self._send_message("position_update", open_positions.to_dict('records'))
+
+                for _, position in positions_to_close.iterrows():
+                    symbol_to_close = position['symbol']
+                    self._send_message("log", f"Time-based exit for {symbol_to_close}. Closing position.")
+                    self.broker.close_position(symbol_to_close)
 
             self._send_message("log", "Loop finished. Waiting for next 60s iteration...")
             # This sleep is non-blocking for the UI as it's in a separate thread.

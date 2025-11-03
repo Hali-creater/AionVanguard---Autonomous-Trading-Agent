@@ -67,3 +67,9 @@ class AlpacaIntegration:
             return self.executor.get_open_positions()
         logging.warning('Executor not initialized.')
         return pd.DataFrame()
+
+    def close_position(self, symbol: str):
+        if self.executor:
+            return self.executor.close_position(symbol)
+        logging.warning('Executor not initialized.')
+        return None

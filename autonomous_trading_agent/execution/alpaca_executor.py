@@ -183,7 +183,8 @@ class AlpacaExecutor(BaseExecutor):
                     'avg_entry_price': float(pos.avg_entry_price),
                     'market_value': float(pos.market_value),
                     'unrealized_pl': float(pos.unrealized_pl),
-                    'unrealized_plpc': float(pos.unrealized_plpc)
+                    'unrealized_plpc': float(pos.unrealized_plpc),
+                    'entry_time': pos.timestamp
                 })
 
             df = pd.DataFrame(positions_data)
@@ -192,3 +193,21 @@ class AlpacaExecutor(BaseExecutor):
         except Exception as e:
             logging.error(f'Error fetching open positions: {e}')
             return pd.DataFrame()
+
+    def close_position(self, symbol: str):
+        """
+        Closes an open position for a given symbol.
+
+        Args:
+            symbol: The symbol of the position to close.
+
+        Returns:
+            The order ID if the position was closed successfully, None otherwise.
+        """
+        try:
+            order_id = self.api.close_position(symbol)
+            logging.info(f'Closed position for {symbol}. Order ID: {order_id}')
+            return order_id
+        except Exception as e:
+            logging.error(f'Error closing position for {symbol}: {e}')
+            return None
