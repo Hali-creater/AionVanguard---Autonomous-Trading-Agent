@@ -229,3 +229,13 @@ class RiskManager:
         # You might want to reset initial_balance if account_balance changes significantly day-to-day
         self.initial_balance = self.account_balance # Reset initial balance for next day's limit calculation
         logging.info('Daily loss reset.')
+
+    def update_account_balance(self, new_balance: float):
+        """
+        Updates the account balance.
+        """
+        if new_balance > 0:
+            self.account_balance = new_balance
+            logging.info(f'Account balance updated to: {self.account_balance:.2f}')
+        else:
+            logging.warning('Attempted to update account balance with a non-positive value.')

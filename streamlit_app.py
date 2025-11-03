@@ -139,6 +139,8 @@ while not st.session_state.message_queue.empty():
             st.session_state.agent_status = data
         elif msg_type == "position_update":
             st.session_state.positions = pd.DataFrame(data)
+        elif msg_type == "account_balance_update":
+            st.session_state.account_balance = data
 
     except Empty:
         break # Queue is empty, exit the loop
