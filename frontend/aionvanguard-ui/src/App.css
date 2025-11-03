@@ -1,0 +1,37 @@
+.App {
+  text-align: center;
+}
+
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+}
+
+.main-content {
+  display: flex;
+  padding: 20px;
+}
+
+.config-panel {
+  width: 300px;
+  padding: 20px;
+  border-right: 1px solid #ccc;
+}
+
+.dashboard {
+  flex-grow: 1;
+  padding: 20px;
+}
+
+.activity-log {
+  margin-bottom: 20px;
+}
+
+.logs {
+  height: 300px;
+  overflow-y: scroll;
+  border: 1px solid #ccc;
+  padding: 10px;
+  text-align: left;
+}
