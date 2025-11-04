@@ -15,8 +15,9 @@ COPY frontend/aionvanguard-ui/ ./
 RUN npm run build
 
 # Stage 3: Create the final image
-FROM cgr.dev/chainguard/static
-COPY --from=backend-builder /server /server
-COPY --from=frontend-builder /app/dist /static
+FROM alpine:latest
+WORKDIR /app
+COPY --from=backend-builder /server .
+COPY --from=frontend-builder /app/dist ./static
 EXPOSE 8080
-CMD ["/server"]
+CMD ["/app/server"]
