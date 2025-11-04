@@ -73,6 +73,11 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	// Serve the frontend files from the /static directory
+	fs := http.FileServer(http.Dir("./static"))
+	http.Handle("/", fs)
+
+	// Handle WebSocket connections
 	http.HandleFunc("/ws", handleConnections)
 
 	log.Println("HTTP server started on :8080")
