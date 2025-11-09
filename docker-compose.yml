@@ -1,22 +1,10 @@
+version: '3.8'
 services:
-  backend:
-    build: ./backend
+  aionvanguard:
+    build: .
     ports:
-      - "8080:8080"
+      - "8501:8501"
     environment:
       - ALPACA_API_KEY_ID=${ALPACA_API_KEY_ID}
       - ALPACA_API_SECRET_KEY=${ALPACA_API_SECRET_KEY}
       - FINNHUB_API_KEY=${FINNHUB_API_KEY}
-
-  frontend:
-    build:
-      context: ./frontend/aionvanguard-ui
-      dockerfile: Dockerfile
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
-
-networks:
-  default:
-    driver: bridge
